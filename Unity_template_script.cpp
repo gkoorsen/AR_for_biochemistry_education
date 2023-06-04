@@ -48,64 +48,68 @@ public class QRCodeDetection : MonoBehaviour
 
     void Update()
     {
-        var cameraTexture = new Texture2D(arCamera.pixelWidth, arCamera.pixelHeight, TextureFormat.RGB24, false);
+        // Capture a camera frame
+        var cameraTexture = new Texture2D(arCamera.pixelWidth, arCamera.pixelHeight);
+        arCamera.Render();
+        RenderTexture.active = arCamera.targetTexture;
         cameraTexture.ReadPixels(new Rect(0, 0, arCamera.pixelWidth, arCamera.pixelHeight), 0, 0);
         cameraTexture.Apply();
 
+        // Convert the camera frame to a ZXing luminance source
         var luminanceSource = new RGBLuminanceSource(cameraTexture.GetRawTextureData(), cameraTexture.width, cameraTexture.height);
-        var binaryBitmap = new BinaryBitmap(new HybridBinarizer(luminanceSource));
 
-        var result = barcodeReader.Decode(binaryBitmap);
+        // Decode QR codes from the luminance source
+        var result = barcodeReader.Decode(luminanceSource);
         if (result != null)
         {
-            ShowModel(result.Text);
+            // QR code detected and decoded, perform your desired actions here
+            Debug.Log("QR Code detected: " + result.Text);
+
+            if (!qrDetected)
+            {
+                qrDetected = true;
+                ShowModel(modelPrefabs[0].name);
+            }
         }
 
+        // Clean up
+        Destroy(cameraTexture);
+
+        // Touch inputs for switching between models and changing rotation speed
         if (Input.touchCount > 0)
         {
             Touch touch = Input.GetTouch(0);
 
-            if (touch.phase == TouchPhase.Began)
+            // Check for swipe up
+            if (touch.phase == TouchPhase.Ended && touch.deltaPosition.y > 0)
             {
-                startTouchPosition = touch.position;
-                if (touch.tapCount == 1)
-                {
-                    rotationSpeed += 0.5f;
-                }
-                else if (touch.tapCount == 2)
-                {
-                    rotationSpeed -= 0.5f;
+                SwitchToNextModel();
+            }
 
-                    if (rotationSpeed < 0)
-                    {
-                        rotationSpeed = 0;
-                    }
+            // Check for swipe down
+            if (touch.phase == TouchPhase.Ended && touch.deltaPosition.y < 0)
+            {
+                SwitchToPreviousModel();
+            }
+
+            // Single tap to speed up rotation
+            if (touch.tapCount == 1)
+            {
+                RotateSpeed += 10f;
+            }
+
+            // Double tap to slow down rotation
+            if (touch.tapCount == 2)
+            {
+                RotateSpeed -= 10f;
+                if (RotateSpeed < 0)
+                {
+                    RotateSpeed = 0;
                 }
             }
-            else if (touch.phase == TouchPhase.Ended)
-            {
-                endTouchPosition = touch.position;
-
-                if (Mathf.Abs(endTouchPosition.y - startTouchPosition.y) > 50 && Mathf.Abs(endTouchPosition.x - startTouchPosition.x) < 50)
-                {
-                    if (endTouchPosition.y > startTouchPosition.y)
-                    {
-                        OnSwipeUp();
-                    }
-                    else
-                    {
-                        OnSwipeDown();
-                    }
-                }
-            }
-        }
-
-        if (currentModelName != "")
-        {
-            ARObjects[currentModelName].transform.Rotate(0, rotationSpeed, 0);
         }
     }
-
+    
     void ShowModel(string modelName)
     {
         if (currentModelName != "")
